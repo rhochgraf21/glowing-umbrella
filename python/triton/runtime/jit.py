@@ -620,11 +620,27 @@ class JITFunction(KernelInterface[T]):
                 return None
             # compile the kernel
             src = self.ASTSource(self, signature, constants, configs[0])
+            print_autotuning = os.environ.get("TRITON_PRINT_AUTOTUNING", "0") == "1"
+            
+            di = driver.active.get_device_interface()
+            start_event = di.Event(enable_timing=True)
+            end_event = di.Event(enable_timing=True)
+           
+            start_event.record()
             kernel = self.compile(
                 src,
                 target=target,
                 options=options.__dict__,
             )
+            end_event.record()
+            estimate_ms = start_event.elapsed_time(end_event)
+            if print_autotuning:
+                print(f"{estimate_ms:<10}", end="")  # Print each row
+                for k, v in constants.items():
+                    print(f" & {str(v)}", end="")
+                print(" \\\\")
+                # print(f"Compilation of kernel completed in {estimate_ms} miliseconds, config {constants}.")
+
             self.cache[device][key] = kernel
             self._call_hook(key, signature, device, constants, options, configs, warmup, before=False)
 
